@@ -1,0 +1,119 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build pinky",
+            "type": "shell",
+            "command": "/opt/odin/odin",
+            "args": [
+                "build",
+                "${workspaceFolder}",
+                "-debug",
+                "-o:none",
+                "-out:pinky",
+                "-vet-packages:pinky",
+                "-vet-cast",
+                "-vet",
+                "-strict-style",
+                //"-sanitize:memory",
+                //"-sanitize:address",
+            ],
+            "windows": {
+                "command": "odin.exe",
+                "args": [
+                    "build",
+                    "${workspaceFolder}",
+                    "-debug",
+                    "-o:none",
+                    "-out:pinky.exe",
+                    "-vet",
+                    "-strict-style",
+                    "-vet-packages:pinky"
+                ]
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/bin"
+            },
+            "presentation": {
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": false
+            },
+            "problemMatcher": {
+                "owner": "odin",
+                "fileLocation": "absolute",
+                "applyTo": "allDocuments",
+                "pattern": [
+                    {
+                        "regexp": "^([^\\s].*)\\((\\d+):(\\d+)\\) \\w*\\s*Error: (.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "message": 4,
+                        "loop": true
+                    }
+                ]
+            }
+        },
+        {
+            "label": "test pinky",
+            "type": "shell",
+            "command": "/opt/odin/odin",
+            "args": [
+                "test",
+                "${workspaceFolder}",
+                // "-debug",
+                "-o:none",
+                "-out:pinky_test",
+                "-vet",
+                "-strict-style"
+            ],
+            "windows": {
+                "command": "odin.exe",
+                "args": [
+                    "test",
+                    "${workspaceFolder}",
+                    // "-debug",
+                    "-o:none",
+                    "-out:pinky_test.exe",
+                    // "-sanitize:memory",
+                    "-vet",
+                    "-strict-style"
+                ]
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/bin"
+            },
+            "presentation": {
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "showReuseMessage": false
+            },
+            "problemMatcher": {
+                "owner": "odin",
+                "fileLocation": "absolute",
+                "applyTo": "allDocuments",
+                "pattern": [
+                    {
+                        "regexp": "^([^\\s].*)\\((\\d+):(\\d+)\\) \\w*\\s*Error: (.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "message": 4,
+                        "loop": true
+                    }
+                ]
+            }
+        }
+    ]
+}

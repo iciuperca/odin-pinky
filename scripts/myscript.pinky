@@ -1,0 +1,14 @@
+---------------------------------------
+-- Initialize variables
+---------------------------------------
+pi := 3.141592
+y := 8.23 - -3.5
+
+---------------------------------------
+-- Test if x is positive or negative
+---------------------------------------
+if x >= 0 then
+  println('x is positive')
+else
+  println('x is negative')
+end

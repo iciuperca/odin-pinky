@@ -1,0 +1,34 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug pinky",
+            "program": "${workspaceFolder}/bin/pinky",
+            "args": [
+                "scripts/myscript.pinky"
+            ],
+            "windows": {
+                "program": "${workspaceFolder}/bin/pinky.exe"
+            },
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug pinky test",
+            "program": "${workspaceFolder}/bin/pinky_test",
+            "windows": {
+                "program": "${workspaceFolder}/bin/pinky_test.exe"
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+        }
+    ]
+}
