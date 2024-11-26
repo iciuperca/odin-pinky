@@ -26,18 +26,38 @@ EXIT_CODE_CONFIG :: 78
 g_had_error := false
 
 @(private = "file")
-run :: proc(source: []u8, allocator := context.allocator) -> bool {
+run :: proc(source: string, allocator := context.allocator) -> bool {
     lexer := lexer_create(source)
     defer lexer_destroy(&lexer)
 
     tokens := lexer_tokenize(&lexer)
 
+    fmt.printfln("tokens:\n")
     for token in tokens {
         token_string := token_to_string(token, allocator)
         defer delete(token_string)
         fmt.println(token_string)
-        // fmt.println(token)
     }
+
+    parser, parser_create_err := parser_create(tokens)
+    if parser_create_err != nil {
+        fmt.printfln("Error creating parser: %v", parser_create_err)
+
+        return false
+    }
+    
+    fmt.printfln("parsed ast:\n")
+    ast, parse_err := parser_parse(&parser)
+    defer free_expr_iterative(ast, allocator)
+    if parse_err != nil {
+        fmt.printfln("Error parsing: %v", parse_err)
+
+        return false
+    }
+    //print_expr_iterative(ast, allocator)
+    expr_to_string := expr_to_string(ast, 0, allocator)
+    defer delete(expr_to_string)
+    fmt.printfln("ast:\n%v\n", expr_to_string)
 
     return true
 }
@@ -52,7 +72,9 @@ run_file :: proc(path: string) -> bool {
         os.exit(EXIT_CODE_NOINPUT)
     }
 
-    run(file_data)
+    if (!run(string(file_data))) {
+        return false
+    }
 
     if g_had_error {
         os.exit(EXIT_CODE_DATAERR)
@@ -78,7 +100,7 @@ run_prompt :: proc() {
             os.exit(EXIT_CODE_IOERR)
         }
 
-        run(line)
+        run(string(line))
         g_had_error = false
     }
 }
@@ -123,10 +145,6 @@ main :: proc() {
             mem.tracking_allocator_destroy(&track)
         }
     }
-
-    // fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
-    // err := fmt.register_user_formatter(type_info_of(Token).id, token_formatter)
-    // assert(err == .None)
-
+    
     _main()
 }
