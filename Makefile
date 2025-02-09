@@ -5,7 +5,7 @@ DEBUG_EXE=$(BIN_DIR)/pinky
 RELEASE_EXE=$(BIN_DIR)/pinky_release
 TEST_EXE=$(BIN_DIR)/pinky_test
 ODIN_FILES=$(wildcard *.odin)
-VET_FLAGS=-vet -strict-style -vet-cast -vet-using-param -vet-using-stmt -vet-tabs -terse-errors
+VET_FLAGS=-vet -strict-style -vet-cast -vet-using-param -vet-using-stmt -vet-tabs -terse-errors -vet-packages:pinky -vet-unused-procedures
 # -vet-packages:pinky -vet-unused-procedures
 VET_FLAGS_RELEASE=$(VET_FLAGS)
 

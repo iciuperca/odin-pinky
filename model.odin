@@ -7,6 +7,8 @@ import "core:strings"
 FORMAT_PADDING :: "  "
 
 Expression_Id :: distinct u64
+Statement_Id :: distinct u64
+Node_Id :: distinct u64
 
 String_Type :: enum {
 	STRING_TYPE_SINGLE,
@@ -27,22 +29,22 @@ String :: struct {
 }
 
 Bin_Op :: struct {
-	left:  Expression_Id,
+	left:  Node_Id,
 	op:    Token,
-	right: Expression_Id,
+	right: Node_Id,
 }
 
 Un_Op :: struct {
 	op:      Token,
-	operand: Expression_Id,
+	operand: Node_Id,
 }
 
 // Example: ( expr )
 Grouping :: struct {
-	expression: Expression_Id,
+	expression: Node_Id,
 }
 
-Expr_Variant :: union {
+Expr :: union {
 	Integer,
 	Float,
 	String,
@@ -51,18 +53,55 @@ Expr_Variant :: union {
 	Grouping,
 }
 
-Expr :: struct {
-	id:      Expression_Id,
-	variant: Expr_Variant,
+While_Stmt :: struct {
+	condition: Node_Id,
+	body:      Node_Id,
 }
 
-Expression_Pool :: struct {
-	expressions: map[Expression_Id]Expr,
-	allocator:   mem.Allocator,
+Assigment_Stmt :: struct {
+	name:  Token,
+	value: Node_Id,
 }
 
-expression_get_next_id :: proc "contextless" () -> Expression_Id {
-	@(static) next_id: Expression_Id
+If_Stmt :: struct {
+	condition:   Node_Id,
+	then_branch: Node_Id,
+	else_branch: Node_Id,
+}
+
+For_Stmt :: struct {
+	initialization: Node_Id,
+	condition:      Node_Id,
+	increment:      Node_Id,
+	body:           Node_Id,
+}
+
+// Statements perform actions
+Stmt :: union {
+	While_Stmt,
+	Assigment_Stmt,
+	If_Stmt,
+	For_Stmt,
+}
+
+Node_Variant :: union {
+	Expr,
+	Stmt,
+}
+
+Node :: struct {
+	id:      Node_Id,
+	lineno:  int,
+	variant: Node_Variant,
+}
+
+Node_Pool :: struct {
+	nodes:     map[Node_Id]Node,
+	allocator: mem.Allocator,
+}
+
+node_get_next_id :: proc "contextless" () -> Node_Id {
+	@(static) next_id: Node_Id
 
 	next_id += 1
 
@@ -70,62 +109,69 @@ expression_get_next_id :: proc "contextless" () -> Expression_Id {
 }
 
 @(require_results)
-new_expr_integer :: proc(expression_pool: ^Expression_Pool, value: int) -> Expression_Id {
+new_expr_integer :: proc(node_pool: ^Node_Pool, value, lineno: int) -> Node_Id {
 	int_expr := Integer {
 		value = value,
 	}
+	expr: Expr = int_expr
 
-	id := expression_get_next_id()
-	expression_pool.expressions[id] = Expr {
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
 		id      = id,
-		variant = int_expr,
+		lineno  = lineno,
+		variant = expr,
 	}
 
 	return id
 }
 
 @(require_results)
-new_expr_float :: proc(expression_pool: ^Expression_Pool, value: f64) -> Expression_Id {
+new_expr_float :: proc(node_pool: ^Node_Pool, value: f64, lineno: int) -> Node_Id {
 	float_expr := Float {
 		value = value,
 	}
+	expr: Expr = float_expr
 
-	id := expression_get_next_id()
-	expression_pool.expressions[id] = Expr {
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
 		id      = id,
-		variant = float_expr,
+		lineno  = lineno,
+		variant = expr,
 	}
 
 	return id
 }
 
 @(require_results)
-new_expr_string :: proc(expression_pool: ^Expression_Pool, value: string, type: String_Type) -> Expression_Id {
+new_expr_string :: proc(node_pool: ^Node_Pool, value: string, type: String_Type, lineno: int) -> Node_Id {
 	string_expr := String {
 		value = value,
 		type  = type,
 	}
+	expr: Expr = string_expr
 
-	id := expression_get_next_id()
-	expression_pool.expressions[id] = Expr {
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
 		id      = id,
-		variant = string_expr,
+		lineno  = lineno,
+		variant = expr,
 	}
 
 	return id
 }
 
 @(require_results)
-new_expr_un_op :: proc(expression_pool: ^Expression_Pool, op: Token, operand_id: Expression_Id) -> Expression_Id {
+new_expr_un_op :: proc(node_pool: ^Node_Pool, op: Token, operand_id: Node_Id, lineno: int) -> Node_Id {
 	un_op_expr := Un_Op {
 		op      = op,
 		operand = operand_id,
 	}
+	expr: Expr = un_op_expr
 
-	id := expression_get_next_id()
-	expression_pool.expressions[id] = Expr {
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
 		id      = id,
-		variant = un_op_expr,
+		variant = expr,
 	}
 
 	return id
@@ -133,17 +179,18 @@ new_expr_un_op :: proc(expression_pool: ^Expression_Pool, op: Token, operand_id:
 
 
 @(require_results)
-new_expr_bin_op :: proc(expression_pool: ^Expression_Pool, left_id: Expression_Id, op: Token, right_id: Expression_Id) -> Expression_Id {
+new_expr_bin_op :: proc(node_pool: ^Node_Pool, left_id: Node_Id, op: Token, right_id: Node_Id, lineno: int) -> Node_Id {
 	bin_op_expr := Bin_Op {
 		left  = left_id,
 		op    = op,
 		right = right_id,
 	}
+	expr: Expr = bin_op_expr
 
-	id := expression_get_next_id()
-	expression_pool.expressions[id] = Expr {
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
 		id      = id,
-		variant = bin_op_expr,
+		variant = expr,
 	}
 
 	return id
@@ -151,109 +198,167 @@ new_expr_bin_op :: proc(expression_pool: ^Expression_Pool, left_id: Expression_I
 
 
 @(require_results)
-new_expr_grouping :: proc(expression_pool: ^Expression_Pool, expression_id: Expression_Id) -> Expression_Id {
+new_expr_grouping :: proc(node_pool: ^Node_Pool, expression_id: Node_Id, lineno: int) -> Node_Id {
 	grouping_expr := Grouping {
 		expression = expression_id,
 	}
+	expr: Expr = grouping_expr
 
-	id := expression_get_next_id()
-	expression_pool.expressions[id] = Expr {
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
 		id      = id,
-		variant = grouping_expr,
+		variant = expr,
 	}
 
 	return id
 }
 
-destroy_expression_pool :: proc(expression_pool: ^Expression_Pool) {
-	delete(expression_pool.expressions)
+@(require_results)
+node_pool_create :: proc(allocator := context.allocator) -> Node_Pool {
+	return Node_Pool{nodes = make(map[Node_Id]Node, allocator), allocator = allocator}
 }
 
-expression_pool_create :: proc(allocator := context.allocator) -> Expression_Pool {
-	return Expression_Pool{expressions = make(map[Expression_Id]Expr, allocator), allocator = allocator}
+destroy_node_pool :: proc(node_pool: ^Node_Pool) {
+	delete(node_pool.nodes)
 }
 
-While_Stmt :: struct {
-	using stmt: Stmt,
-	condition:  ^Expr,
-	body:       ^Stmt,
-}
+@(require_results)
+node_to_string :: proc(node_pool: ^Node_Pool, node_id: Node_Id, level: int = 0) -> string {
+	builder := strings.builder_make_none(node_pool.allocator)
 
-Assigment_Stmt :: struct {
-	using stmt: Stmt,
-	name:       Token,
-	value:      ^Expr,
-}
-
-// Statements perform an action
-Stmt :: struct {
-	variant: union {
-		^While_Stmt,
-		^Assigment_Stmt,
-	},
-}
-
-expr_to_string :: proc(expression_pool: ^Expression_Pool, expression_id: Expression_Id, level: int = 0) -> string {
-	builder := strings.builder_make_none(expression_pool.allocator)
-
-	padding := strings.repeat(FORMAT_PADDING, level, expression_pool.allocator)
+	padding := strings.repeat(FORMAT_PADDING, level, node_pool.allocator)
 	defer delete(padding)
 
-	expr := expression_pool.expressions[expression_id]
+	node := node_pool.nodes[node_id]
 
-	switch e in expr.variant {
-	case Integer:
-		strings.write_string(&builder, "Integer{")
-		strings.write_int(&builder, e.value, 10)
-		strings.write_string(&builder, "}")
-	case Float:
-		strings.write_string(&builder, "Float{")
-		strings.write_f64(&builder, e.value, 'f')
-		strings.write_string(&builder, "}")
-	case String:
-		strings.write_string(&builder, "String{")
-		strings.write_string(&builder, e.value)
-		strings.write_string(&builder, "}")
-	case Un_Op:
-		next_level := level + 1
-		strings.write_string(&builder, "Un_Op{")
-		format_newline(&builder, padding)
-		strings.write_string(&builder, "op: ")
-		strings.write_string(&builder, e.op.lexme)
-		format_newline(&builder, padding)
-		strings.write_string(&builder, "operand: ")
-		operand_string := expr_to_string(expression_pool, e.operand, next_level)
-		defer delete(operand_string)
-		strings.write_string(&builder, operand_string)
-		format_end_of_block(&builder, padding)
-	case Bin_Op:
-		next_level := level + 1
+	switch node_type in node.variant {
+	case Expr:
+		switch e in node_type {
+		case Integer:
+			strings.write_string(&builder, "Integer{")
+			strings.write_int(&builder, e.value, 10)
+			strings.write_string(&builder, "}")
+		case Float:
+			strings.write_string(&builder, "Float{")
+			strings.write_f64(&builder, e.value, 'f')
+			strings.write_string(&builder, "}")
+		case String:
+			strings.write_string(&builder, "String{")
+			strings.write_string(&builder, e.value)
+			strings.write_string(&builder, "}")
+		case Un_Op:
+			next_level := level + 1
+			strings.write_string(&builder, "Un_Op{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "op: ")
+			strings.write_string(&builder, e.op.lexme)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "operand: ")
+			operand_string := node_to_string(node_pool, e.operand, next_level)
+			defer delete(operand_string)
+			strings.write_string(&builder, operand_string)
+			format_end_of_block(&builder, padding)
+		case Bin_Op:
+			next_level := level + 1
 
-		strings.write_string(&builder, "Bin_Op{")
-		format_newline(&builder, padding)
-		strings.write_string(&builder, "left: ")
-		left_string := expr_to_string(expression_pool, e.left, next_level)
-		defer delete(left_string)
-		strings.write_string(&builder, left_string)
-		format_newline(&builder, padding)
-		strings.write_string(&builder, "op: ")
-		strings.write_string(&builder, e.op.lexme)
-		format_newline(&builder, padding)
-		strings.write_string(&builder, "right: ")
-		right_string := expr_to_string(expression_pool, e.right, next_level)
-		defer delete(right_string)
-		strings.write_string(&builder, right_string)
-		format_end_of_block(&builder, padding)
+			strings.write_string(&builder, "Bin_Op{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "left: ")
+			left_string := node_to_string(node_pool, e.left, next_level)
+			defer delete(left_string)
+			strings.write_string(&builder, left_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "op: ")
+			strings.write_string(&builder, e.op.lexme)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "right: ")
+			right_string := node_to_string(node_pool, e.right, next_level)
+			defer delete(right_string)
+			strings.write_string(&builder, right_string)
+			format_end_of_block(&builder, padding)
 
-	case Grouping:
-		next_level := level + 1
-		strings.write_string(&builder, "Grouping{")
-		format_newline(&builder, padding)
-		strings.write_string(&builder, "expression: ")
-		expression_string := expr_to_string(expression_pool, e.expression, next_level)
-		defer delete(expression_string)
-		strings.write_string(&builder, expression_string)
-		format_end_of_block(&builder, padding)
+		case Grouping:
+			next_level := level + 1
+			strings.write_string(&builder, "Grouping{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "expression: ")
+			expression_string := node_to_string(node_pool, e.expression, next_level)
+			defer delete(expression_string)
+			strings.write_string(&builder, expression_string)
+			format_end_of_block(&builder, padding)
+		}
+	case Stmt:
+		switch s in node_type {
+		case While_Stmt:
+			next_level := level + 1
+			strings.write_string(&builder, "While_Stmt{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "condition: ")
+			condition_string := node_to_string(node_pool, s.condition, next_level)
+			defer delete(condition_string)
+			strings.write_string(&builder, condition_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "body: ")
+			body_string := node_to_string(node_pool, s.body, next_level)
+			defer delete(body_string)
+			strings.write_string(&builder, body_string)
+			format_end_of_block(&builder, padding)
+		case Assigment_Stmt:
+			next_level := level + 1
+			strings.write_string(&builder, "Assigment_Stmt{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "name: ")
+			strings.write_string(&builder, s.name.lexme)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "value: ")
+			value_string := node_to_string(node_pool, s.value, next_level)
+			defer delete(value_string)
+			strings.write_string(&builder, value_string)
+			format_end_of_block(&builder, padding)
+		case If_Stmt:
+			next_level := level + 1
+			strings.write_string(&builder, "If_Stmt{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "condition: ")
+			condition_string := node_to_string(node_pool, s.condition, next_level)
+			defer delete(condition_string)
+			strings.write_string(&builder, condition_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "then_branch: ")
+			then_branch_string := node_to_string(node_pool, s.then_branch, next_level)
+			defer delete(then_branch_string)
+			strings.write_string(&builder, then_branch_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "else_branch: ")
+			else_branch_string := node_to_string(node_pool, s.else_branch, next_level)
+			defer delete(else_branch_string)
+			strings.write_string(&builder, else_branch_string)
+			format_end_of_block(&builder, padding)
+		case For_Stmt:
+			next_level := level + 1
+			strings.write_string(&builder, "For_Stmt{")
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "initialization: ")
+			initialization_string := node_to_string(node_pool, s.initialization, next_level)
+			defer delete(initialization_string)
+			strings.write_string(&builder, initialization_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "condition: ")
+			condition_string := node_to_string(node_pool, s.condition, next_level)
+			defer delete(condition_string)
+			strings.write_string(&builder, condition_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "increment: ")
+			increment_string := node_to_string(node_pool, s.increment, next_level)
+			defer delete(increment_string)
+			strings.write_string(&builder, increment_string)
+			format_newline(&builder, padding)
+			strings.write_string(&builder, "body: ")
+			body_string := node_to_string(node_pool, s.body, next_level)
+			defer delete(body_string)
+			strings.write_string(&builder, body_string)
+			format_end_of_block(&builder, padding)
+		}
 	}
 
 	return strings.to_string(builder)

@@ -5,11 +5,11 @@ import "core:strconv"
 import "core:strings"
 
 Parser :: struct {
-	expression_pool: Expression_Pool,
-	tokens:          []Token,
-	current:         int,
-	current_line:    int,
-	current_column:  int,
+	node_pool:      Node_Pool,
+	tokens:         []Token,
+	current:        int,
+	current_line:   int,
+	current_column: int,
 }
 
 Parser_Unexpected_Token_Error :: struct {
@@ -34,14 +34,6 @@ Parser_End_Of_File_Error :: struct {
 	line:     int,
 	column:   int,
 	location: runtime.Source_Code_Location,
-}
-
-parser_end_of_file_error_create :: proc(line: int, column: int, loc := #caller_location) -> (err: Parser_End_Of_File_Error) {
-	err.line = line
-	err.column = column
-	err.location = loc
-
-	return err
 }
 
 Parser_Underflow_Error :: struct {
@@ -90,14 +82,6 @@ Parser_Convert_String_Error :: struct {
 	line:     int,
 	column:   int,
 	location: runtime.Source_Code_Location,
-}
-
-parser_convert_string_error_create :: proc(line: int, column: int, loc := #caller_location) -> (err: Parser_Convert_String_Error) {
-	err.line = line
-	err.column = column
-	err.location = loc
-
-	return err
 }
 
 Parser_Unmatched_Parentheses_Error :: struct {
@@ -208,15 +192,15 @@ parser_create :: proc(tokens: []Token) -> (result: Parser, err: Parser_Error) {
 	}
 
 	parser := Parser {
-		expression_pool = expression_pool_create(),
-		tokens          = tokens,
+		node_pool = node_pool_create(),
+		tokens    = tokens,
 	}
 
 	return parser, nil
 }
 
 parser_destroy :: proc(p: ^Parser) {
-	destroy_expression_pool(&p.expression_pool)
+	destroy_node_pool(&p.node_pool)
 }
 
 parser_previous_token :: proc(p: ^Parser) -> (Token, Parser_Error) {
@@ -239,48 +223,6 @@ parser_peek :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	return p.tokens[p.current], true
 }
 
-parser_look_ahead :: proc(p: ^Parser, distance: int = 1) -> (token: Token, was_found: bool) {
-	index := p.current + distance
-	if index < 0 || index >= len(p.tokens) {
-		return Token{}, false
-	}
-
-	return p.tokens[index], true
-}
-
-parser_is_next :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: bool) {
-	next_token, next_token_found := parser_peek(p^)
-	if !next_token_found {
-		return false
-	}
-
-	return next_token.kind == token_kind
-}
-
-parser_expect :: proc(p: ^Parser, token_kind: Token_Kind) -> (token: Token, err: Parser_Error) {
-	next_token, next_token_found := parser_peek(p^)
-	if !next_token_found {
-		current_token := p.tokens[p.current]
-		return Token{}, parser_end_of_file_error_create(current_token.line, current_token.column)
-	}
-
-	if next_token.kind != token_kind {
-		return Token{}, parser_unexpected_token_error_create(next_token)
-	}
-
-	token = parser_advance(p) or_return
-
-	return token, nil
-}
-
-parser_previous :: proc(p: Parser) -> (token: Token, was_found: bool) {
-	if p.current <= 0 {
-		return Token{}, false
-	}
-
-	return p.tokens[p.current - 1], true
-}
-
 parser_match :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: bool) {
 	next_token := parser_peek(p^) or_return
 
@@ -293,18 +235,20 @@ parser_match :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: bool) {
 	return true
 }
 
-parser_advance :: proc(p: ^Parser) -> (Token, Parser_Error) {
-	token, token_found := parser_peek(p^)
-	if !token_found {
-		return Token{}, parser_end_of_file_error_create(0, 0)
+parser_advance_match :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: Token, was_matched: bool) {
+	next_token := parser_peek(p^) or_return
+
+	if next_token.kind != token_kind {
+		return next_token, false
 	}
 
 	p.current += 1
 
-	return token, nil
+	return next_token, true
 }
 
-parser_primary_integer :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+@(require_results, private)
+parser_primary_integer :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	token := parser_previous_token(p) or_return
 	n := 0
 	lexme_str := token.lexme
@@ -312,26 +256,27 @@ parser_primary_integer :: proc(p: ^Parser) -> (result: Expression_Id, err: Parse
 	if !int_from_token_ok {
 		err = parser_convert_int_error_create(token.line, token.column)
 	} else {
-		result = new_expr_integer(&p.expression_pool, int_from_token)
+		result = new_expr_integer(&p.node_pool, int_from_token, token.line)
 	}
 
 	return result, err
 }
 
-parser_primary_float :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+@(require_results, private)
+parser_primary_float :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	token := parser_previous_token(p) or_return
 	n := 0
 	float_from_token, float_from_token_ok := strconv.parse_f64(token.lexme, &n)
 	if !float_from_token_ok {
 		err = parser_convert_float_error_create(token.line, token.column)
 	} else {
-		result = new_expr_float(&p.expression_pool, float_from_token)
+		result = new_expr_float(&p.node_pool, float_from_token, token.line)
 	}
 
 	return result, err
 }
 
-parser_primary :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+parser_primary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	if int_was_matched := parser_match(p, .INTEGER); int_was_matched {
 		result = parser_primary_integer(p) or_return
 
@@ -354,12 +299,12 @@ parser_primary :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error)
 
 		string_value, _ := strings.substring(token.lexme, 1, len(token.lexme) - 1)
 
-		result = new_expr_string(&p.expression_pool, string_value, string_type)
+		result = new_expr_string(&p.node_pool, string_value, string_type, token.line)
 
 		return result, err
 	}
 
-	if lparen_was_matched := parser_match(p, .LPAREN); lparen_was_matched {
+	if lparen_token, lparen_was_matched := parser_advance_match(p, .LPAREN); lparen_was_matched {
 		expr := parser_expression(p) or_return
 		if rparen_was_matched := parser_match(p, .RPAREN); !rparen_was_matched {
 			next_token, next_token_found := parser_peek(p^)
@@ -371,7 +316,7 @@ parser_primary :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error)
 				err = parser_unmatched_parentheses_error_create(parser_get_current_line(p^), column)
 			}
 		} else {
-			result = new_expr_grouping(&p.expression_pool, expr)
+			result = new_expr_grouping(&p.node_pool, expr, lparen_token.line)
 		}
 
 		return result, err
@@ -382,12 +327,12 @@ parser_primary :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error)
 	return result, err
 }
 
-parser_unary :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+parser_unary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	if parser_match(p, .NOT) || parser_match(p, .MINUS) || parser_match(p, .PLUS) {
 		operator := parser_previous_token(p) or_return
 		right := parser_unary(p) or_return
-
-		result = new_expr_un_op(&p.expression_pool, operator, right)
+		right_token := parser_previous_token(p) or_return
+		result = new_expr_un_op(&p.node_pool, operator, right, right_token.line)
 	} else {
 		result = parser_primary(p) or_return
 	}
@@ -395,40 +340,43 @@ parser_unary :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
 	return result, err
 }
 
-parser_factor :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+parser_factor :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return parser_unary(p)
 }
 
 //# <term>  ::=  <factor> ( ('*'|'/') <factor> )*
-parser_term :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+parser_term :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	expr := parser_factor(p) or_return
 
 	for parser_match(p, .STAR) || parser_match(p, .SLASH) {
 		operator := parser_previous_token(p) or_return
 		right := parser_factor(p) or_return
-		expr = new_expr_bin_op(&p.expression_pool, expr, operator, right)
+		right_token := parser_previous_token(p) or_return
+		expr = new_expr_bin_op(&p.node_pool, expr, operator, right, right_token.line)
 	}
 
 	return expr, nil
 }
 
 // <expr>  ::=  <term> ( ('+'|'-') <term> )*
-parser_expression :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+parser_expression :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	expr := parser_term(p) or_return
 
 	for parser_match(p, .PLUS) || parser_match(p, .MINUS) {
 		operator := parser_previous_token(p) or_return
 		right := parser_term(p) or_return
-		expr = new_expr_bin_op(&p.expression_pool, expr, operator, right)
+		right_token := parser_previous_token(p) or_return
+		expr = new_expr_bin_op(&p.node_pool, expr, operator, right, right_token.line)
 	}
 
 	return expr, err
 }
 
-parser_parse :: proc(p: ^Parser) -> (result: Expression_Id, err: Parser_Error) {
+parser_parse :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return parser_expression(p)
 }
 
+@(require_results)
 parser_get_current_token :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	if p.current <= 0 {
 		return p.tokens[0], false
@@ -441,15 +389,10 @@ parser_get_current_token :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	return p.tokens[p.current], true
 }
 
+@(require_results)
 parser_get_current_line :: proc(p: Parser) -> int {
 	token, _ := parser_get_current_token(p)
 
 
 	return token.line
-}
-
-parser_get_current_column :: proc(p: Parser) -> int {
-	token, _ := parser_get_current_token(p)
-
-	return token.column
 }

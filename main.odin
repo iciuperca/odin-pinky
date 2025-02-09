@@ -86,9 +86,9 @@ run :: proc(file, source: string, allocator := context.allocator) -> bool {
 		return false
 	}
 	//print_expr_iterative(ast, allocator)
-	expr_to_string := expr_to_string(&parser.expression_pool, ast_id, 0)
-	defer delete(expr_to_string)
-	fmt.printfln("ast:\n%v\n", expr_to_string)
+	node_string := node_to_string(&parser.node_pool, ast_id, 0)
+	defer delete(node_string)
+	fmt.printfln("ast:\n%v\n", node_string)
 
 	return true
 }
