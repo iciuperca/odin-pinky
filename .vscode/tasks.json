@@ -6,39 +6,18 @@
         {
             "label": "build pinky",
             "type": "shell",
-            "command": "/opt/odin/odin",
+            "command": "make",
             "args": [
-                "build",
-                "${workspaceFolder}",
-                "-debug",
-                "-o:none",
-                "-out:pinky",
-                "-vet-packages:pinky",
-                "-vet-cast",
-                "-vet",
-                "-strict-style",
-                //"-sanitize:memory",
-                //"-sanitize:address",
+                "debug",
+                "-j",
+                "$(nproc)"
             ],
-            "windows": {
-                "command": "odin.exe",
-                "args": [
-                    "build",
-                    "${workspaceFolder}",
-                    "-debug",
-                    "-o:none",
-                    "-out:pinky.exe",
-                    "-vet",
-                    "-strict-style",
-                    "-vet-packages:pinky"
-                ]
-            },
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "options": {
-                "cwd": "${workspaceFolder}/bin"
+                "cwd": "${workspaceFolder}"
             },
             "presentation": {
                 "reveal": "always",
@@ -64,35 +43,18 @@
         {
             "label": "test pinky",
             "type": "shell",
-            "command": "/opt/odin/odin",
+            "command": "make",
             "args": [
                 "test",
-                "${workspaceFolder}",
-                // "-debug",
-                "-o:none",
-                "-out:pinky_test",
-                "-vet",
-                "-strict-style"
+                "-j",
+                "$(nproc)"
             ],
-            "windows": {
-                "command": "odin.exe",
-                "args": [
-                    "test",
-                    "${workspaceFolder}",
-                    // "-debug",
-                    "-o:none",
-                    "-out:pinky_test.exe",
-                    // "-sanitize:memory",
-                    "-vet",
-                    "-strict-style"
-                ]
-            },
             "group": {
                 "kind": "test",
                 "isDefault": true
             },
             "options": {
-                "cwd": "${workspaceFolder}/bin"
+                "cwd": "${workspaceFolder}"
             },
             "presentation": {
                 "reveal": "always",

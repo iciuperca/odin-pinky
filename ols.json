@@ -22,5 +22,6 @@
     "enable_format": true,
     "verbose": true,
     "enable_procedure_context": true,
-    "enable_inlay_hints": true
+    "enable_inlay_hints": true,
+    "disable_parser_errors": true
 }

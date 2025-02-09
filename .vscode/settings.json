@@ -1,4 +1,6 @@
 {
     "cmake.configureOnOpen": false,
     "makefile.configureOnOpen": false,
+    "editor.defaultFormatter": null,
+    "editor.formatOnSave": true,
 }
