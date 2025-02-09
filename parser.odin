@@ -20,6 +20,7 @@ Parser_Unexpected_Token_Error :: struct {
 	location: runtime.Source_Code_Location,
 }
 
+@(private, require_results)
 parser_unexpected_token_error_create :: proc(token: Token, loc := #caller_location) -> (err: Parser_Unexpected_Token_Error) {
 	err.token = token
 	err.location = loc
@@ -42,6 +43,7 @@ Parser_Underflow_Error :: struct {
 	location: runtime.Source_Code_Location,
 }
 
+@(private, require_results)
 parser_underflow_error_create :: proc(line: int = 0, column: int = 0, loc := #caller_location) -> (err: Parser_Underflow_Error) {
 	err.line = line
 	err.column = column
@@ -56,6 +58,7 @@ Parser_Convert_Int_Error :: struct {
 	location: runtime.Source_Code_Location,
 }
 
+@(private, require_results)
 parser_convert_int_error_create :: proc(line: int, column: int, loc := #caller_location) -> (err: Parser_Convert_Int_Error) {
 	err.line = line
 	err.column = column
@@ -70,6 +73,7 @@ Parser_Convert_Float_Error :: struct {
 	location: runtime.Source_Code_Location,
 }
 
+@(private, require_results)
 parser_convert_float_error_create :: proc(line: int, column: int, loc := #caller_location) -> (err: Parser_Convert_Float_Error) {
 	err.line = line
 	err.column = column
@@ -90,6 +94,7 @@ Parser_Unmatched_Parentheses_Error :: struct {
 	location: runtime.Source_Code_Location,
 }
 
+@(private, require_results)
 parser_unmatched_parentheses_error_create :: proc(
 	line: int,
 	column: int,
@@ -108,6 +113,7 @@ Parser_Create_No_Tokens_Error :: struct {
 	location: runtime.Source_Code_Location,
 }
 
+@(private, require_results)
 parser_create_no_tokens_error_create :: proc(loc := #caller_location) -> (err: Parser_Create_No_Tokens_Error) {
 	err.location = loc
 
@@ -125,6 +131,7 @@ Parser_Error :: union {
 	Parser_Create_No_Tokens_Error,
 }
 
+@(require_results)
 parser_error_to_string :: proc(error: Parser_Error, allocator := context.allocator) -> string {
 	builder := strings.builder_make_none(allocator)
 
@@ -186,6 +193,7 @@ parser_error_to_string :: proc(error: Parser_Error, allocator := context.allocat
 	return strings.to_string(builder)
 }
 
+@(require_results)
 parser_create :: proc(tokens: []Token) -> (result: Parser, err: Parser_Error) {
 	if len(tokens) == 0 {
 		return Parser{}, parser_create_no_tokens_error_create()
@@ -203,6 +211,7 @@ parser_destroy :: proc(p: ^Parser) {
 	destroy_node_pool(&p.node_pool)
 }
 
+@(private, require_results)
 parser_previous_token :: proc(p: ^Parser) -> (Token, Parser_Error) {
 	if p.current <= 0 {
 		return Token{}, parser_underflow_error_create()
@@ -211,6 +220,7 @@ parser_previous_token :: proc(p: ^Parser) -> (Token, Parser_Error) {
 	return p.tokens[p.current - 1], nil
 }
 
+@(private, require_results)
 parser_peek :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	if p.current >= len(p.tokens) {
 		return Token{}, false
@@ -223,6 +233,7 @@ parser_peek :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	return p.tokens[p.current], true
 }
 
+@(private, require_results)
 parser_match :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: bool) {
 	next_token := parser_peek(p^) or_return
 
@@ -235,6 +246,7 @@ parser_match :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: bool) {
 	return true
 }
 
+@(private, require_results)
 parser_advance_match :: proc(p: ^Parser, token_kind: Token_Kind) -> (result: Token, was_matched: bool) {
 	next_token := parser_peek(p^) or_return
 
@@ -276,6 +288,7 @@ parser_primary_float :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error)
 	return result, err
 }
 
+@(private, require_results)
 parser_primary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	if int_was_matched := parser_match(p, .INTEGER); int_was_matched {
 		result = parser_primary_integer(p) or_return
@@ -327,6 +340,7 @@ parser_primary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return result, err
 }
 
+@(private, require_results)
 parser_unary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	if parser_match(p, .NOT) || parser_match(p, .MINUS) || parser_match(p, .PLUS) {
 		operator := parser_previous_token(p) or_return
@@ -340,17 +354,14 @@ parser_unary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return result, err
 }
 
-parser_factor :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
-	return parser_unary(p)
-}
-
-//# <term>  ::=  <factor> ( ('*'|'/') <factor> )*
-parser_term :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
-	expr := parser_factor(p) or_return
+// <multiplication>  ::= <unary> ( ('*'|'/') <unary> )*
+@(private, require_results)
+parser_multiplication :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
+	expr := parser_unary(p) or_return
 
 	for parser_match(p, .STAR) || parser_match(p, .SLASH) {
 		operator := parser_previous_token(p) or_return
-		right := parser_factor(p) or_return
+		right := parser_unary(p) or_return
 		right_token := parser_previous_token(p) or_return
 		expr = new_expr_bin_op(&p.node_pool, expr, operator, right, right_token.line)
 	}
@@ -358,13 +369,14 @@ parser_term :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return expr, nil
 }
 
-// <expr>  ::=  <term> ( ('+'|'-') <term> )*
-parser_expression :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
-	expr := parser_term(p) or_return
+// <addition>  ::= <multiplication> ( ('+'|'-') <multiplication> )*
+@(private, require_results)
+parser_addition :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
+	expr := parser_multiplication(p) or_return
 
 	for parser_match(p, .PLUS) || parser_match(p, .MINUS) {
 		operator := parser_previous_token(p) or_return
-		right := parser_term(p) or_return
+		right := parser_multiplication(p) or_return
 		right_token := parser_previous_token(p) or_return
 		expr = new_expr_bin_op(&p.node_pool, expr, operator, right, right_token.line)
 	}
@@ -372,11 +384,17 @@ parser_expression :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return expr, err
 }
 
+@(private, require_results)
+parser_expression :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
+	return parser_addition(p)
+}
+
+@(require_results)
 parser_parse :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	return parser_expression(p)
 }
 
-@(require_results)
+@(private, require_results)
 parser_get_current_token :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	if p.current <= 0 {
 		return p.tokens[0], false
@@ -389,7 +407,7 @@ parser_get_current_token :: proc(p: Parser) -> (token: Token, was_found: bool) {
 	return p.tokens[p.current], true
 }
 
-@(require_results)
+@(private, require_results)
 parser_get_current_line :: proc(p: Parser) -> int {
 	token, _ := parser_get_current_token(p)
 
