@@ -21,6 +21,10 @@ Float :: struct {
 	value: f64,
 }
 
+Bool :: struct {
+	value: bool,
+}
+
 String :: struct {
 	value: string,
 	type:  String_Type,
@@ -45,6 +49,7 @@ Grouping :: struct {
 Expr :: union {
 	Integer,
 	Float,
+	Bool,
 	String,
 	Un_Op,
 	Bin_Op,
@@ -163,6 +168,23 @@ new_expr_string :: proc(node_pool: ^Node_Pool, value: string, type: String_Type,
 	return id
 }
 
+@(require_results, private)
+new_expr_bool :: proc(node_pool: ^Node_Pool, value: bool, lineno: int) -> Node_Id {
+	bool_expr := Bool {
+		value = value,
+	}
+	expr: Expr = bool_expr
+
+	id := node_get_next_id()
+	node_pool.nodes[id] = Node {
+		id      = id,
+		lineno  = lineno,
+		variant = expr,
+	}
+
+	return id
+}
+
 @(require_results)
 new_expr_un_op :: proc(node_pool: ^Node_Pool, op: Token, operand_id: Node_Id, lineno: int) -> Node_Id {
 	un_op_expr := Un_Op {
@@ -244,6 +266,10 @@ node_to_string :: proc(node_pool: Node_Pool, node_id: Node_Id, level: int = 0) -
 		case Float:
 			strings.write_string(&builder, "Float{")
 			strings.write_f64(&builder, e.value, 'f')
+			strings.write_string(&builder, "}")
+		case Bool:
+			strings.write_string(&builder, "Bool{")
+			strings.write_string(&builder, bool_to_string(e.value))
 			strings.write_string(&builder, "}")
 		case String:
 			strings.write_string(&builder, "String{")

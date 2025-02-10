@@ -288,6 +288,16 @@ parser_primary_float :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error)
 	return result, err
 }
 
+@(require_results, private)
+parser_primary_bool :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
+	token := parser_previous_token(p) or_return
+	bool_from_token := token.lexme == "true"
+	result = new_expr_bool(&p.node_pool, bool_from_token, token.line)
+
+	return result, nil
+}
+
+// <primary>  ::= INTEGER | FLOAT | STRING | bool | '(' <expression> ')' | IDENTIFIER
 @(private, require_results)
 parser_primary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 	if int_was_matched := parser_match(p, .INTEGER); int_was_matched {
@@ -313,6 +323,12 @@ parser_primary :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 		string_value, _ := strings.substring(token.lexme, 1, len(token.lexme) - 1)
 
 		result = new_expr_string(&p.node_pool, string_value, string_type, token.line)
+
+		return result, err
+	}
+
+	if bool_was_matched := parser_match(p, .TRUE) || parser_match(p, .FALSE); bool_was_matched {
+		result = parser_primary_bool(p) or_return
 
 		return result, err
 	}

@@ -9,6 +9,7 @@ Interpreter :: struct {
 Value :: union {
 	f64,
 	string,
+	bool,
 }
 
 Interpret_Error_Type :: enum {
@@ -82,6 +83,26 @@ value_do_plus :: proc {
 }
 
 @(require_results, private)
+bool_to_f64 :: #force_inline proc "contextless" (a: bool) -> f64 {
+	return 1.0 if a else 0.0
+}
+
+@(require_results, private)
+f64_to_bool :: #force_inline proc "contextless" (a: f64) -> bool {
+	return a != 0.0
+}
+
+@(require_results, private)
+bool_to_string :: #force_inline proc "contextless" (a: bool) -> string {
+	return "true" if a else "false"
+}
+
+@(require_results, private)
+string_to_bool :: #force_inline proc "contextless" (a: string) -> bool {
+	return a == ""
+}
+
+@(require_results, private)
 value_plus :: proc(a, b: Value, allocator := context.allocator) -> Value {
 	switch a_val in a {
 	case f64:
@@ -90,6 +111,8 @@ value_plus :: proc(a, b: Value, allocator := context.allocator) -> Value {
 			return value_plus_number_number(a_val, b_val)
 		case string:
 			return value_plus_number_string(a_val, b_val, allocator)
+		case bool:
+			return value_plus_number_number(a_val, bool_to_f64(b_val))
 		}
 	case string:
 		switch b_val in b {
@@ -97,46 +120,57 @@ value_plus :: proc(a, b: Value, allocator := context.allocator) -> Value {
 			return value_plus_string_number(a_val, b_val, allocator)
 		case string:
 			return value_plus_string_string(a_val, b_val, allocator)
+		case bool:
+			return value_plus_string_string(a_val, bool_to_string(b_val), allocator)
+		}
+	case bool:
+		switch b_val in b {
+		case f64:
+			return value_plus_number_number(bool_to_f64(a_val), b_val)
+		case string:
+			return value_plus_string_string(bool_to_string(a_val), b_val, allocator)
+		case bool:
+			return bool_to_f64(a_val) + bool_to_f64(b_val)
 		}
 	}
 
 	return Value{}
 }
 
-value_minus :: proc(a, b: Value) -> Value {
+value_minus :: proc(a, b: Value) -> (val: Value) {
 	#partial switch a_val in a {
 	case f64:
 		#partial switch b_val in b {
 		case f64:
-			return a_val - b_val
+			val = a_val - b_val
 		}
 	}
 
-	return Value{}
+	return val
 }
 
-value_mul :: proc(a, b: Value) -> Value {
+value_mul :: proc(a, b: Value) -> (val: Value) {
 	#partial switch a_val in a {
 	case f64:
 		#partial switch b_val in b {
 		case f64:
-			return a_val * b_val
+			val = a_val * b_val
 		}
 	}
 
-	return Value{}
+	return val
 }
 
-value_div :: proc(a, b: Value) -> Value {
+value_div :: proc(a, b: Value) -> (val: Value) {
 	#partial switch a_val in a {
 	case f64:
 		#partial switch b_val in b {
 		case f64:
-			return a_val / b_val
+			val = a_val / b_val
 		}
 	}
 
-	return Value{}
+	return val
 }
 
 interpreter_create :: proc(node_pool: Node_Pool) -> Interpreter {
@@ -155,6 +189,8 @@ interpreter_interpret :: proc(interpreter: Interpreter, node_id: Node_Id) -> (va
 		case Integer:
 			return f64(e.value)
 		case Float:
+			return e.value
+		case Bool:
 			return e.value
 		case String:
 			return e.value
@@ -181,11 +217,15 @@ interpreter_interpret :: proc(interpreter: Interpreter, node_id: Node_Id) -> (va
 				} else if e.op.kind == .PLUS {
 					return +val
 				} else if e.op.kind == .NOT {
-					return 1.0 if val == 0.0 else 0.0
+					return !f64_to_bool(val)
 				}
 			case string:
 				if e.op.kind == .NOT {
-					return 1.0 if val == "" else 0.0
+					return !string_to_bool(val)
+				}
+			case bool:
+				if e.op.kind == .NOT {
+					return !val
 				}
 			}
 		}
