@@ -6,8 +6,6 @@ import "core:strings"
 
 FORMAT_PADDING :: "  "
 
-Expression_Id :: distinct u64
-Statement_Id :: distinct u64
 Node_Id :: distinct u64
 
 String_Type :: enum {
@@ -106,6 +104,11 @@ node_get_next_id :: proc "contextless" () -> Node_Id {
 	next_id += 1
 
 	return next_id
+}
+
+@(require_results)
+get_node :: proc(node_pool: Node_Pool, node_id: Node_Id) -> (node: Node, node_found: bool) #optional_ok {
+	return node_pool.nodes[node_id]
 }
 
 @(require_results)
@@ -223,7 +226,7 @@ destroy_node_pool :: proc(node_pool: ^Node_Pool) {
 }
 
 @(require_results)
-node_to_string :: proc(node_pool: ^Node_Pool, node_id: Node_Id, level: int = 0) -> string {
+node_to_string :: proc(node_pool: Node_Pool, node_id: Node_Id, level: int = 0) -> string {
 	builder := strings.builder_make_none(node_pool.allocator)
 
 	padding := strings.repeat(FORMAT_PADDING, level, node_pool.allocator)

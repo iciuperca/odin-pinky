@@ -208,7 +208,7 @@ parser_create :: proc(tokens: []Token) -> (result: Parser, err: Parser_Error) {
 }
 
 parser_destroy :: proc(p: ^Parser) {
-	destroy_node_pool(&p.node_pool)
+	//destroy_node_pool(&p.node_pool)
 }
 
 @(private, require_results)
@@ -390,8 +390,10 @@ parser_expression :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
 }
 
 @(require_results)
-parser_parse :: proc(p: ^Parser) -> (result: Node_Id, err: Parser_Error) {
-	return parser_expression(p)
+parser_parse :: proc(p: ^Parser) -> (result: Node_Id, nodes: Node_Pool, err: Parser_Error) {
+	expression := parser_expression(p) or_return
+
+	return expression, p.node_pool, nil
 }
 
 @(private, require_results)

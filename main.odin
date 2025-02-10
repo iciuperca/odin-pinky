@@ -77,7 +77,7 @@ run :: proc(file, source: string, allocator := context.allocator) -> bool {
 	}
 
 	print_separator_heading("AST")
-	ast_id, parse_err := parser_parse(&parser)
+	ast_id, nodes, parse_err := parser_parse(&parser)
 	if parse_err != nil {
 		error_string := parser_error_to_string(parse_err, allocator)
 		defer delete(error_string, allocator)
@@ -85,10 +85,17 @@ run :: proc(file, source: string, allocator := context.allocator) -> bool {
 
 		return false
 	}
-	//print_expr_iterative(ast, allocator)
-	node_string := node_to_string(&parser.node_pool, ast_id, 0)
+
+	node_string := node_to_string(nodes, ast_id, 0)
 	defer delete(node_string)
 	fmt.printfln("ast:\n%v\n", node_string)
+
+	// Interpreter
+	print_separator_heading("Interpreter")
+	interpreter := interpreter_create(nodes)
+	defer interpreter_destroy(&interpreter)
+	val := interpreter_interpret(interpreter, ast_id)
+	fmt.printfln("Result: %v", val)
 
 	return true
 }
