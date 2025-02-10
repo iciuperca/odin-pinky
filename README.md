@@ -1,3 +1,3 @@
 # Pinky language
 
-Implementation written in odin
+[pinky-lang](https://pinky-lang.org/) implementation written in odin
